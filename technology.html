@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Technology · River Run 3D</title>
+  <meta name="description" content="Inside River Run 3D: ray marching, distance fields, WebGPU, procedural worlds, and synthesized audio" />
+  <link rel="stylesheet" href="/src/site.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="site-header">
+      <div><p class="eyebrow">PROCEDURAL FLIGHT ARCADE · RAY MARCHING</p><h1>River Run <span>3D</span></h1></div>
+      <nav aria-label="Main navigation"><a href="./">Play</a><a href="./about.html">How to play</a><a href="./technology.html" aria-current="page">Technology</a></nav>
+    </header>
+    <article class="guide">
+      <p class="eyebrow">BEHIND THE SCENES / 02</p>
+      <h2>A world shaped by mathematics</h2>
+      <p>River Run 3D is an independent project inspired by the arcade adventures of
+        the ZX Spectrum era. Its procedural 3D world is rendered with ray marching
+        in a WebGPU shader.</p>
+      <p>Not affiliated with or endorsed by any classic game creator or publisher.</p>
+      <section>
+        <h2>What is ray marching?</h2>
+        <p>For each pixel, the renderer sends a ray from the camera into the scene
+          and advances it in steps, asking how far the nearest surface is at each position
+          — large distances allow longer steps, while nearby surfaces call for smaller ones</p>
+        <p>When the ray gets close enough to a surface, the shader shades that point
+          using its material, surface direction, and lighting — rays that escape the scene
+          show the sky</p>
+        <ol class="march-steps" aria-label="Ray marching steps">
+          <li><strong>Cast</strong><span>Start a ray at the camera</span></li>
+          <li><strong>Measure</strong><span>Estimate distance to the scene</span></li>
+          <li><strong>Advance</strong><span>Move along the ray and repeat</span></li>
+          <li><strong>Shade</strong><span>Color the surface when reached</span></li>
+        </ol>
+        <p>Many thanks to <a href="https://iquilezles.org/">Inigo Quilez</a> for the detailed
+          explanation of this technology in
+          <a href="https://iquilezles.org/articles/raymarchingdf/">Raymarching distance fields</a>
+          — a valuable guide to understanding how distance functions become rendered worlds</p>
+      </section>
+      <section>
+        <h2>Shapes as distance fields</h2>
+        <p>A signed distance function, or SDF, describes a shape through the distance
+          to its surface — positive outside, zero on the surface, and negative inside</p>
+        <p>The shader combines mathematical shapes to form planes, ships, helicopters,
+          bridges, and other objects, while the landscape follows a terrain height field
+          and sampled river profiles</p>
+        <p>The scene combines distance estimates, so the marcher uses conservative steps
+          and iteration limits to balance detail with rendering cost</p>
+      </section>
+      <section>
+        <h2>WebGPU + WGSL</h2>
+        <p>TypeScript runs the game simulation and sends camera settings, river samples,
+          and nearby objects to GPU buffers — a full-screen triangle invokes the WGSL
+          fragment shader that renders the view</p>
+        <p>Surface normals are estimated from changes in the scene distance, and additional
+          rays estimate soft shadows — procedural materials add rock, grass, water highlights,
+          and metallic surfaces</p>
+        <p>Ray marching can be expensive, especially on phones — the renderer limits work
+          using object bounds, spatial chunks, and adaptive ray-march and shadow quality</p>
+      </section>
+      <section>
+        <h2>A repeatable procedural world</h2>
+        <p>A seeded generator builds river bends, islands, bridges, fuel stops, and enemy
+          placements — the same seed and river setting reproduce the same route</p>
+        <p>As the camera moves, a window of river samples and nearby objects is uploaded
+          to the GPU, keeping the shader focused on the current stretch of the world</p>
+      </section>
+      <section>
+        <h2>Synthesized sound</h2>
+        <p>The Web Audio API generates engine noise, shots, explosions, splashes, and game
+          cues procedurally — sound is off by default and can be enabled or muted with the Sound button below the game</p>
+      </section>
+      <section>
+        <h2>Running in your browser</h2>
+        <p>Playing requires a browser with an available WebGPU adapter — support and performance depend on the device, browser, and graphics drivers</p>
+      </section>
+      <a href="./">← Back to the river</a>
+    </article>
+  </main>
+</body>
+</html>

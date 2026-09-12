@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>River Run 3D · River flight</title>
+    <meta name="description" content="Fly a procedural river, dodge enemies, and keep your fuel topped up in River Run 3D." />
+    <link rel="stylesheet" href="/src/site.css" />
+    <style>
+      body {
+        margin: 0;
+        background: #05080c;
+      }
+
+      #game {
+        position: relative;
+        width: 800px;
+        font-family: "Courier New", monospace;
+        image-rendering: pixelated;
+      }
+
+      #canvas {
+        display: block;
+        width: 800px;
+        height: 600px;
+        image-rendering: auto;
+      }
+
+      #fuel {
+        --fuel-level: 100%;
+        position: absolute;
+        top: 16px;
+        right: 18px;
+        width: 176px;
+        height: 16px;
+        box-sizing: border-box;
+        border: 2px solid #f4f6f8;
+        background: #111a;
+        isolation: isolate;
+      }
+
+      #fuel::after {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: -1;
+        width: var(--fuel-level);
+        height: 100%;
+        background: repeating-linear-gradient(90deg, #d5b821 0 9px, #8f7b18 9px 12px);
+        content: "";
+      }
+
+      #fuel.low::after {
+        background: repeating-linear-gradient(90deg, #e33b31 0 9px, #8e211d 9px 12px);
+      }
+
+      #lives {
+        position: absolute;
+        top: 16px;
+        left: 18px;
+        color: #fff;
+        font: bold 22px monospace;
+        text-shadow: 2px 2px #000;
+      }
+
+      .life-plane {
+        display: inline-block;
+        width: 18px;
+        height: 25px;
+        margin-right: 7px;
+        background: #f4f6f8;
+        clip-path: polygon(
+          50% 0%, 61% 26%, 61% 39%, 100% 68%, 100% 78%,
+          61% 65%, 61% 84%, 76% 94%, 76% 100%, 50% 94%,
+          24% 100%, 24% 94%, 39% 84%, 39% 65%, 0% 78%,
+          0% 68%, 39% 39%, 39% 26%
+        );
+        filter: drop-shadow(2px 2px #000);
+      }
+
+      #score {
+        position: absolute;
+        top: 48px;
+        left: 18px;
+        color: #fff;
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: 1px;
+        text-shadow: 2px 2px #000;
+      }
+
+      #bridge {
+        position: absolute;
+        top: 48px;
+        right: 18px;
+        color: #fff;
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: 1px;
+        text-shadow: 2px 2px #000;
+      }
+
+      #high-score {
+        position: absolute;
+        top: 80px;
+        left: 18px;
+        color: #fff;
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: 1px;
+        text-shadow: 2px 2px #000;
+      }
+
+      #pause {
+        display: none;
+        position: absolute;
+        inset: 0;
+        place-items: center;
+        color: #fff;
+        background: #07111d40;
+        font: bold 36px monospace;
+        line-height: 1.45;
+        text-align: center;
+        text-shadow: 3px 3px #000;
+        white-space: pre-line;
+      }
+
+      #pause.visible {
+        display: grid;
+      }
+
+      .game-over-title {
+        font-size: 58px;
+        line-height: 1.1;
+      }
+
+      .game-over-restart {
+        margin-top: 14px;
+        font-size: 22px;
+      }
+
+      #message {
+        position: absolute;
+        top: 30%;
+        left: 50%;
+        color: #fff36a;
+        font-size: 27px;
+        font-weight: 900;
+        letter-spacing: 2px;
+        opacity: 0;
+        pointer-events: none;
+        text-shadow: 3px 3px #000;
+        transform: translate(-50%, 0);
+      }
+
+      #message.visible {
+        animation: score-popup 0.85s steps(6, end);
+      }
+
+      #debug {
+        display: none;
+        position: absolute;
+        right: 18px;
+        bottom: 16px;
+        padding: 7px 9px;
+        color: #8dff72;
+        background: #061008cc;
+        font-size: 14px;
+        font-weight: 900;
+        line-height: 1.35;
+        white-space: pre;
+        pointer-events: none;
+      }
+
+      #debug.visible {
+        display: block;
+      }
+
+      @keyframes score-popup {
+        0% { opacity: 1; transform: translate(-50%, 8px); }
+        70% { opacity: 1; }
+        100% { opacity: 0; transform: translate(-50%, -28px); }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="site-header">
+        <div><p class="eyebrow">PROCEDURAL FLIGHT ARCADE · RAY MARCHING</p><h1>River Run <span>3D</span></h1></div>
+        <nav aria-label="Main navigation"><a href="./" aria-current="page">Play</a><a href="./about.html">How to play ↗</a><a href="./technology.html">Technology</a></nav>
+      </header>
+      <p class="intro">Follow the river. Break through. Keep flying<br /><span>Inspired by the arcade adventures of the ZX Spectrum era</span></p>
+      <section class="game-frame" aria-label="River Run 3D game">
+    <div id="game">
+      <canvas id="canvas"></canvas>
+      <div id="fuel" aria-label="Fuel 100"></div>
+      <div id="lives"></div>
+      <div id="score">SCORE 0</div>
+      <div id="bridge">BRIDGE 1</div>
+      <div id="high-score">HI 0</div>
+      <div id="pause">PAUSED</div>
+      <div id="status">Initializing WebGPU…</div>
+    </div>
+      </section>
+      <section class="controls" aria-label="Game controls">
+        <div class="game-actions">
+          <button data-control="Enter">Start</button><button data-control="KeyH">Pause</button>
+          <button data-control="KeyC">Camera</button><button data-control="KeyR">Restart</button>
+          <button id="toggle-sound" type="button" aria-pressed="false" disabled>Sound: off</button>
+        </div>
+        <div class="touch-controls" aria-label="Touch flight controls">
+          <div class="steering"><button data-control="ArrowLeft" aria-label="Steer left">←</button><button data-control="ArrowRight" aria-label="Steer right">→</button></div>
+          <div class="speed"><button data-control="ArrowUp" aria-label="Accelerate">Speed +</button><button data-control="ArrowDown" aria-label="Slow down">Speed −</button></div>
+          <button class="fire" data-control="Space">FIRE</button>
+        </div>
+      </section>
+      <section class="route-controls" aria-label="Route settings">
+        <div class="route-actions">
+          <span id="route-seed"></span>
+          <button id="toggle-river" type="button" aria-pressed="false">Straight river</button>
+          <button id="random-seed" type="button">Random route ↗</button>
+        </div>
+        <p>Changing the route starts a new game. Share this page’s URL to fly the same route.</p>
+      </section>
+      <footer><span>Arrows to fly · Space to fire</span><a href="./about.html">Controls &amp; field guide</a></footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
