@@ -16,7 +16,7 @@ async function main(): Promise<void> {
     throw new Error("Required DOM elements are missing");
   }
 
-  const controls = document.querySelectorAll<HTMLButtonElement>("[data-control]");
+  const controls = document.querySelectorAll<HTMLButtonElement>("[data-control], [data-joystick]");
   controls.forEach((button) => { button.disabled = true; });
   status.setAttribute("role", "status");
   status.textContent = "Checking WebGPU availability…";

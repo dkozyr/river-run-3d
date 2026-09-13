@@ -34,11 +34,14 @@ button { font: 600 12px system-ui; color: #d9e6eb; background: #14232e; border: 
 button:hover { background: #203844; }
 button.pressed, button:active { background: #a6efc4; color: #102b23; }
 :focus-visible { outline: 2px solid #a6efc4; outline-offset: 4px; }
-.touch-controls { display: none; gap: 12px; justify-content: space-between; align-items: stretch; margin-top: 16px; }
-.steering, .speed { display: flex; gap: 8px; }
-.steering button { font-size: 26px; min-width: 58px; }
-.speed { flex-direction: column; }
-.fire { background: #a6efc4; color: #102b23; min-width: 82px; letter-spacing: 2px; }
+.touch-controls { display: none; gap: 24px; justify-content: space-between; align-items: center; margin-top: 20px; padding: 0 12px; }
+.joystick, .fire { width: clamp(112px, 30vw, 144px); height: clamp(112px, 30vw, 144px); flex: 0 0 auto; border-radius: 50%; padding: 0; }
+.joystick { position: relative; background: #14232e; border: 2px solid #49616e; }
+.joystick.pressed, .joystick:active { background: #203844; }
+.joystick-directions { position: absolute; inset: 8px; display: flex; flex-direction: column; justify-content: space-between; color: #92a4af; font-size: 20px; pointer-events: none; }
+.joystick-thumb { position: absolute; width: 44%; height: 44%; left: 28%; top: 28%; border-radius: 50%; background: #a6efc4; border: 2px solid #c9f8dc; box-shadow: 0 4px 12px #0006; transform: translate(var(--stick-x, 0px), var(--stick-y, 0px)); pointer-events: none; }
+.fire { background: #a6efc4; color: #102b23; border: 3px solid #c9f8dc; letter-spacing: 2px; font-size: 16px; box-shadow: inset 0 0 0 7px #102b231a; }
+.fire.pressed { background: #d5ffe6; box-shadow: inset 0 0 0 10px #102b2333; }
 footer { display: flex; justify-content: space-between; gap: 16px; font-size: 12px; color: #92a4af; margin: 24px auto 0; max-width: 802px; }
 .guide { max-width: 802px; margin: 32px auto; line-height: 1.75; }
 .guide section { background: #10202aaa; border: 1px solid #293d48; border-radius: 12px; padding: 24px; margin: 20px 0; }

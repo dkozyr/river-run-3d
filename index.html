@@ -216,8 +216,10 @@
           </label>
         </div>
         <div class="touch-controls" aria-label="Touch flight controls">
-          <div class="steering"><button data-control="ArrowLeft" aria-label="Steer left">←</button><button data-control="ArrowRight" aria-label="Steer right">→</button></div>
-          <div class="speed"><button data-control="ArrowUp" aria-label="Accelerate">Speed +</button><button data-control="ArrowDown" aria-label="Slow down">Speed −</button></div>
+          <button class="joystick" data-joystick aria-label="Movement: drag left or right to steer, up to accelerate, down to slow down">
+            <span class="joystick-directions" aria-hidden="true"><span>↑</span><span>← &nbsp; →</span><span>↓</span></span>
+            <span class="joystick-thumb" aria-hidden="true"></span>
+          </button>
           <button class="fire" data-control="Space">FIRE</button>
         </div>
       </section>
