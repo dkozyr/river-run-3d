@@ -152,7 +152,19 @@ export class Renderer {
   private frameTimeAverage = 1 / 60;
   private debugUpdateTimer = 0;
   private debugVisible = false;
-  private quality = 1;
+  private quality = 0;
+  private qualityMode: "low" | "medium" | "high" = "low";
+  private failed = false;
+  private gpuBusy = false;
+  private failureMessage: string | null = null;
+  private failureHandler: ((message: string) => void) | null = null;
+
+  set onFailure(handler: ((message: string) => void) | null) {
+    this.failureHandler = handler;
+    if (handler && this.failureMessage) handler(this.failureMessage);
+  }
+
+  get hasFailed(): boolean { return this.failed; }
   private previousPlayer: MotionState = {
     position: [...this.player.position],
     yaw: this.player.yaw,
@@ -210,6 +222,14 @@ export class Renderer {
     this.pauseElement.textContent = "ARROWS / TAP TO START";
     this.pauseElement.classList.add("visible");
 
+    void device.lost.then((info) => {
+      console.error("WebGPU device lost", { reason: info.reason, message: info.message, adapter: device.adapterInfo });
+      this.fail(`Graphics device lost (${info.reason}). ${info.message || "The browser provided no further details."}`);
+    });
+    device.addEventListener("uncapturederror", (event) => {
+      console.error("WebGPU error", event.error);
+      this.fail(`Graphics error: ${event.error.message}`);
+    });
     this.installInput();
     this.installRenderingPause();
     this.resize();
@@ -224,143 +244,161 @@ export class Renderer {
     bridgeElement: HTMLDivElement,
     highScoreElement: HTMLDivElement,
     pauseElement: HTMLDivElement,
+    adapter: GPUAdapter,
   ): Promise<Renderer> {
-    const adapter = await navigator.gpu.requestAdapter();
 
     if (!adapter) {
       throw new Error("No suitable WebGPU adapter found.");
     }
 
     const device = await adapter.requestDevice();
-    const context = canvas.getContext("webgpu");
+    try {
+      const context = canvas.getContext("webgpu");
 
-    if (!context) {
-      throw new Error("Could not create WebGPU canvas context.");
+      if (!context) {
+        throw new Error("Could not create WebGPU canvas context.");
+      }
+
+      const format = navigator.gpu.getPreferredCanvasFormat();
+
+      context.configure({
+        device,
+        format,
+        alphaMode: "opaque",
+      });
+
+      const module = device.createShaderModule({
+        label: "Ray marching shader",
+        code: shaderCode,
+      });
+
+      const uniformBuffer = device.createBuffer({
+        label: "Frame uniforms",
+        size: FRAME_UNIFORM_SIZE,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+
+      const riverSampleBuffer = device.createBuffer({
+        label: "River world samples",
+        size: RIVER_SAMPLE_COUNT * 4 * Float32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+
+      const worldObjectBuffer = device.createBuffer({
+        label: "World objects",
+        size: WORLD_OBJECT_CAPACITY * 8 * Float32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+
+      const objectChunkBuffer = device.createBuffer({
+        label: "Object chunks",
+        size: OBJECT_CHUNK_COUNT * 2 * Uint32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+
+      const bindGroupLayout = device.createBindGroupLayout({
+        entries: [
+          {
+            binding: 0,
+            visibility: GPUShaderStage.FRAGMENT,
+            buffer: { type: "uniform" },
+          },
+          {
+            binding: 1,
+            visibility: GPUShaderStage.FRAGMENT,
+            buffer: { type: "read-only-storage" },
+          },
+          {
+            binding: 2,
+            visibility: GPUShaderStage.FRAGMENT,
+            buffer: { type: "read-only-storage" },
+          },
+          {
+            binding: 3,
+            visibility: GPUShaderStage.FRAGMENT,
+            buffer: { type: "read-only-storage" },
+          },
+        ],
+      });
+
+      const pipelineLayout = device.createPipelineLayout({
+        bindGroupLayouts: [bindGroupLayout],
+      });
+
+      const pipeline = await device.createRenderPipelineAsync({
+        label: "Ray marching pipeline",
+        layout: pipelineLayout,
+        vertex: {
+          module,
+          entryPoint: "vs_main",
+        },
+        fragment: {
+          module,
+          entryPoint: "fs_main",
+          targets: [{ format }],
+        },
+        primitive: {
+          topology: "triangle-list",
+        },
+      });
+
+      const bindGroup = device.createBindGroup({
+        layout: bindGroupLayout,
+        entries: [
+          {
+            binding: 0,
+            resource: { buffer: uniformBuffer },
+          },
+          {
+            binding: 1,
+            resource: { buffer: riverSampleBuffer },
+          },
+          {
+            binding: 2,
+            resource: { buffer: worldObjectBuffer },
+          },
+          {
+            binding: 3,
+            resource: { buffer: objectChunkBuffer },
+          },
+        ],
+      });
+
+      await device.queue.onSubmittedWorkDone();
+      return new Renderer(
+        canvas,
+        context,
+        device,
+        pipeline,
+        uniformBuffer,
+        riverSampleBuffer,
+        worldObjectBuffer,
+        objectChunkBuffer,
+        bindGroup,
+        format,
+        fuelElement,
+        livesElement,
+        scoreElement,
+        bridgeElement,
+        highScoreElement,
+        pauseElement,
+      );
+    } catch (error) {
+      device.destroy();
+      throw error;
     }
+  }
 
-    const format = navigator.gpu.getPreferredCanvasFormat();
-
-    context.configure({
-      device,
-      format,
-      alphaMode: "opaque",
-    });
-
-    const module = device.createShaderModule({
-      label: "Ray marching shader",
-      code: shaderCode,
-    });
-
-    const uniformBuffer = device.createBuffer({
-      label: "Frame uniforms",
-      size: FRAME_UNIFORM_SIZE,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-
-    const riverSampleBuffer = device.createBuffer({
-      label: "River world samples",
-      size: RIVER_SAMPLE_COUNT * 4 * Float32Array.BYTES_PER_ELEMENT,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-
-    const worldObjectBuffer = device.createBuffer({
-      label: "World objects",
-      size: WORLD_OBJECT_CAPACITY * 8 * Float32Array.BYTES_PER_ELEMENT,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-
-    const objectChunkBuffer = device.createBuffer({
-      label: "Object chunks",
-      size: OBJECT_CHUNK_COUNT * 2 * Uint32Array.BYTES_PER_ELEMENT,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-
-    const bindGroupLayout = device.createBindGroupLayout({
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.FRAGMENT,
-          buffer: { type: "uniform" },
-        },
-        {
-          binding: 1,
-          visibility: GPUShaderStage.FRAGMENT,
-          buffer: { type: "read-only-storage" },
-        },
-        {
-          binding: 2,
-          visibility: GPUShaderStage.FRAGMENT,
-          buffer: { type: "read-only-storage" },
-        },
-        {
-          binding: 3,
-          visibility: GPUShaderStage.FRAGMENT,
-          buffer: { type: "read-only-storage" },
-        },
-      ],
-    });
-
-    const pipelineLayout = device.createPipelineLayout({
-      bindGroupLayouts: [bindGroupLayout],
-    });
-
-    const pipeline = device.createRenderPipeline({
-      label: "Ray marching pipeline",
-      layout: pipelineLayout,
-      vertex: {
-        module,
-        entryPoint: "vs_main",
-      },
-      fragment: {
-        module,
-        entryPoint: "fs_main",
-        targets: [{ format }],
-      },
-      primitive: {
-        topology: "triangle-list",
-      },
-    });
-
-    const bindGroup = device.createBindGroup({
-      layout: bindGroupLayout,
-      entries: [
-        {
-          binding: 0,
-          resource: { buffer: uniformBuffer },
-        },
-        {
-          binding: 1,
-          resource: { buffer: riverSampleBuffer },
-        },
-        {
-          binding: 2,
-          resource: { buffer: worldObjectBuffer },
-        },
-        {
-          binding: 3,
-          resource: { buffer: objectChunkBuffer },
-        },
-      ],
-    });
-
-    return new Renderer(
-      canvas,
-      context,
-      device,
-      pipeline,
-      uniformBuffer,
-      riverSampleBuffer,
-      worldObjectBuffer,
-      objectChunkBuffer,
-      bindGroup,
-      format,
-      fuelElement,
-      livesElement,
-      scoreElement,
-      bridgeElement,
-      highScoreElement,
-      pauseElement,
-    );
+  private fail(message: string): void {
+    if (this.failed) return;
+    this.failed = true;
+    this.failureMessage = message;
+    this.audio.setEnabled(false);
+    if (this.animationFrameId !== null) cancelAnimationFrame(this.animationFrameId);
+    this.animationFrameId = null;
+    this.pauseElement.classList.remove("visible");
+    this.device.destroy();
+    this.failureHandler?.(message);
   }
 
   start(): void {
@@ -370,7 +408,12 @@ export class Renderer {
   private frame = (now: number): void => {
     this.animationFrameId = null;
 
-    if (document.hidden || !document.hasFocus()) {
+    if (this.failed || document.hidden || !document.hasFocus()) {
+      return;
+    }
+
+    if (this.gpuBusy) {
+      this.animationFrameId = requestAnimationFrame(this.frame);
       return;
     }
 
@@ -448,6 +491,11 @@ export class Renderer {
     pass.end();
 
     this.device.queue.submit([encoder.finish()]);
+    this.gpuBusy = true;
+    void this.device.queue.onSubmittedWorkDone().then(
+      () => { this.gpuBusy = false; },
+      () => this.fail("Graphics processing failed. The game has stopped."),
+    );
     this.animationFrameId = requestAnimationFrame(this.frame);
   };
 
@@ -542,7 +590,8 @@ export class Renderer {
 
   private resumeRendering(): void {
     if (
-      this.animationFrameId !== null
+      this.failed
+      || this.animationFrameId !== null
       || document.hidden
       || !document.hasFocus()
       || this.paused
@@ -1655,7 +1704,9 @@ export class Renderer {
   }
 
   private resize(): void {
-    const dpr = 1;
+    const [maxWidth, maxHeight] = this.qualityMode === "low" ? [640, 360]
+      : this.qualityMode === "medium" ? [960, 540] : [1600, 1200];
+    const dpr = Math.min(1, maxWidth / Math.max(1, this.canvas.clientWidth), maxHeight / Math.max(1, this.canvas.clientHeight));
     const width = Math.max(1, Math.floor(this.canvas.clientWidth * dpr));
     const height = Math.max(1, Math.floor(this.canvas.clientHeight * dpr));
 
@@ -1668,6 +1719,7 @@ export class Renderer {
   private readonly activeControls = new Map<string, string>();
 
   setControl(code: string, pressed: boolean, source = code): void {
+    if (this.failed) return;
     if (!pressed) {
       this.activeControls.delete(source);
       if (![...this.activeControls.values()].includes(code)) this.keys.delete(code);
@@ -1694,6 +1746,14 @@ export class Renderer {
     if (code === "KeyH" && !this.gameOver) this.togglePause();
     if (code === "KeyR" && this.gameOver) this.resetGame();
     if (code === "Space") this.fire();
+  }
+
+  setQuality(mode: "low" | "medium" | "high"): void {
+    if (this.failed) return;
+    this.qualityMode = mode;
+    this.quality = mode === "low" ? 0 : mode === "medium" ? 0.5 : 1;
+    this.frameTimeAverage = 1 / 30;
+    this.resize();
   }
 
   setSoundEnabled(enabled: boolean): void {
@@ -1859,7 +1919,8 @@ export class Renderer {
     if (this.frameTimeAverage > 1 / 27) {
       this.quality = Math.max(0, this.quality - dt * 0.45);
     } else if (this.frameTimeAverage < 1 / 29) {
-      this.quality = Math.min(1, this.quality + dt * 0.12);
+      const ceiling = this.qualityMode === "low" ? 0 : this.qualityMode === "medium" ? 0.5 : 1;
+      this.quality = Math.min(ceiling, this.quality + dt * 0.12);
     }
 
     if (!this.debugVisible) return;

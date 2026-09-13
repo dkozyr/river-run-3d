@@ -15,6 +15,7 @@ nav [aria-current] { color: #a6efc4; }
 body #game { width: 100%; aspect-ratio: 4 / 3; container-type: inline-size; }
 body #canvas { width: 100%; height: 100%; aspect-ratio: 4 / 3; }
 #status { position: absolute; inset: 0; display: grid; place-content: center; padding: 24px; text-align: center; background: #0b1727de; }
+#status[hidden] { display: none; }
 body #fuel { top: 2cqw; right: 2.25cqw; width: 22cqw; height: 2cqw; min-height: 10px; }
 body #lives { top: 2cqw; left: 2.25cqw; }
 body .life-plane { width: 2.25cqw; height: 3.125cqw; margin-right: .875cqw; }
@@ -85,3 +86,6 @@ button:disabled { opacity: .5; cursor: default; }
 .ray-illustration { margin: 24px 0; }
 .ray-illustration img { display: block; width: 100%; height: auto; border: 1px solid #293d48; border-radius: 10px; }
 .ray-illustration figcaption { margin-top: 10px; color: #92a4af; font-size: 12px; line-height: 1.6; }
+
+.quality-control { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; font-size: 13px; }
+.quality-control select { font: inherit; color: #d9e6eb; background: #14232e; border: 1px solid #344651; border-radius: 8px; padding: 10px 14px; min-height: 44px; }

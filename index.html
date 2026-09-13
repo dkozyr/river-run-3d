@@ -199,7 +199,7 @@
       <div id="bridge">BRIDGE 1</div>
       <div id="high-score">HI 0</div>
       <div id="pause">PAUSED</div>
-      <div id="status">Initializing WebGPU…</div>
+      <div id="status">Checking graphics support…</div>
     </div>
       </section>
       <section class="controls" aria-label="Game controls">
@@ -207,6 +207,13 @@
           <button data-control="Enter">Start</button><button data-control="KeyH">Pause</button>
           <button data-control="KeyC">Camera</button><button data-control="KeyR">Restart</button>
           <button id="toggle-sound" type="button" aria-pressed="false" disabled>Sound: off</button>
+          <label class="quality-control" for="quality">
+            <select id="quality" aria-label="Graphics quality" disabled>
+              <option value="low">Quality: Low</option>
+              <option value="medium">Quality: Medium</option>
+              <option value="high">Quality: High</option>
+            </select>
+          </label>
         </div>
         <div class="touch-controls" aria-label="Touch flight controls">
           <div class="steering"><button data-control="ArrowLeft" aria-label="Steer left">←</button><button data-control="ArrowRight" aria-label="Steer right">→</button></div>

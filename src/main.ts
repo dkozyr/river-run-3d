@@ -1,6 +1,6 @@
 import { installRouteControls } from "./route-controls";
 import { installTouchControls } from "./touch-controls";
-import { Renderer } from "./renderer";
+import { checkWebGPU } from "./startup";
 
 async function main(): Promise<void> {
   const canvas = document.querySelector<HTMLCanvasElement>("#canvas");
@@ -16,14 +16,40 @@ async function main(): Promise<void> {
     throw new Error("Required DOM elements are missing");
   }
 
-  if (!navigator.gpu) {
-    status.textContent = "WebGPU is not supported by this browser.";
-    return;
-  }
+  const controls = document.querySelectorAll<HTMLButtonElement>("[data-control]");
+  controls.forEach((button) => { button.disabled = true; });
+  status.setAttribute("role", "status");
+  status.textContent = "Checking WebGPU availability…";
 
   try {
-    const renderer = await Renderer.create(canvas, fuel, lives, score, bridge, highScore, pause);
-    status.remove();
+    await checkWebGPU();
+    status.textContent = "WebGPU is available. Start in reduced-resolution mode? ";
+    const launch = document.createElement("button");
+    launch.type = "button";
+    launch.textContent = "Load game";
+    status.append(launch);
+    await new Promise<void>((resolve) => launch.addEventListener("click", () => resolve(), { once: true }));
+    status.textContent = "Preparing graphics…";
+    const adapter = await checkWebGPU();
+    const { Renderer } = await import("./renderer");
+    const renderer = await Renderer.create(canvas, fuel, lives, score, bridge, highScore, pause, adapter);
+    const qualitySelect = document.querySelector<HTMLSelectElement>("#quality")!;
+    renderer.onFailure = (message) => {
+      qualitySelect.disabled = true;
+      status.hidden = false;
+      status.textContent = message;
+      controls.forEach((button) => { button.disabled = true; });
+      document.querySelector<HTMLButtonElement>("#toggle-sound")!.disabled = true;
+    };
+    if (renderer.hasFailed) return;
+    status.hidden = true;
+    controls.forEach((button) => { button.disabled = false; });
+    qualitySelect.value = "low";
+    qualitySelect.disabled = false;
+    qualitySelect.addEventListener("change", () => {
+      const mode = qualitySelect.value;
+      if (mode === "low" || mode === "medium" || mode === "high") renderer.setQuality(mode);
+    });
     installTouchControls(renderer);
     const soundButton = document.querySelector<HTMLButtonElement>("#toggle-sound")!;
     let soundEnabled = false;
@@ -37,6 +63,7 @@ async function main(): Promise<void> {
     renderer.start();
   } catch (error) {
     console.error(error);
+    status.hidden = false;
     status.textContent = `Failed to initialize WebGPU: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
